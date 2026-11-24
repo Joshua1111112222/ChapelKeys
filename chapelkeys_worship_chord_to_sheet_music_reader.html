@@ -1,0 +1,1758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ChapelKeys" />
+  <meta name="theme-color" content="#1E293B" />
+  <title>ChapelKeys — Worship Sheet Music Reader</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,500&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            serif: ['Newsreader', 'Georgia', 'serif'],
+          },
+          colors: {
+            paper: '#FCFBF7',
+            ivory: '#F5F2E9',
+            ink: '#1E293B',
+            stage: '#0F141F',
+            stageCard: '#171E2E',
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Enforce strictly vertical scrolling on all mobile and desktop viewports */
+    html, body {
+      overflow-x: hidden;
+      max-width: 100vw;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background-color: #F4F1E8;
+      color: #1E293B;
+    }
+
+    html.dark body {
+      background-color: #0B0F19;
+      color: #F1F5F9;
+    }
+
+    .score-sheet {
+      background-color: #FCFBF7;
+      box-shadow: 0 4px 20px -4px rgba(30, 41, 59, 0.08);
+    }
+
+    html.dark .score-sheet {
+      background-color: #141B29;
+      box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.45);
+    }
+
+    .chord-tap-target {
+      cursor: pointer;
+    }
+
+    .chord-tap-target:active .chord-highlight-pill {
+      opacity: 1;
+    }
+
+    @keyframes pulseRing {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
+    }
+
+    .scanning-pulse {
+      animation: pulseRing 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans antialiased pb-28">
+
+  <!-- Hidden file input for Camera / Screenshot Scan -->
+  <input
+    id="scanFileInput"
+    type="file"
+    accept="image/*"
+    class="hidden"
+  />
+
+  <!-- Compact Sticky Top Bar -->
+  <header class="sticky top-0 z-30 bg-paper/95 dark:bg-stage/95 backdrop-blur-md border-b border-stone-300/80 dark:border-slate-800">
+    <div class="max-w-3xl mx-auto px-3 sm:px-5 py-2.5 flex items-center justify-between gap-2">
+      <!-- Brand + Setlist Drawer Trigger -->
+      <button
+        id="openSetlistBtn"
+        type="button"
+        class="flex items-center gap-2.5 text-left min-w-0 py-1 px-2 -ml-2 rounded-xl hover:bg-stone-200/60 dark:hover:bg-slate-800/80 transition"
+      >
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm font-serif text-xl font-bold">
+          𝄞
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5">
+            <span id="headerSongTitle" class="font-serif font-bold text-base sm:text-lg truncate text-ink dark:text-slate-100">
+              Amazing Grace
+            </span>
+            <span class="text-xs text-indigo-600 dark:text-indigo-400 font-bold shrink-0">▾</span>
+          </div>
+          <p id="headerSongMeta" class="text-[11px] text-stone-500 dark:text-slate-400 truncate">
+            Chapel Setlist · Tap to switch or add song
+          </p>
+        </div>
+      </button>
+
+      <!-- Right Action Buttons -->
+      <div class="flex items-center gap-1.5 shrink-0">
+        <!-- Scan Photo / Screenshot -->
+        <button
+          id="triggerScanBtn"
+          type="button"
+          title="Scan chord sheet photo or screenshot"
+          class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-sm transition"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <span>Scan</span>
+        </button>
+
+        <!-- Paste / Edit Chords -->
+        <button
+          id="openPasteModalBtn"
+          type="button"
+          title="Paste or edit chords and lyrics"
+          class="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs font-bold bg-ivory dark:bg-slate-800 text-ink dark:text-slate-200 border border-stone-300/80 dark:border-slate-700 hover:bg-stone-200/70 transition"
+        >
+          <svg class="w-4 h-4 text-stone-600 dark:text-slate-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          <span class="hidden sm:inline">Paste</span>
+        </button>
+
+        <!-- Stage Dark/Light Toggle -->
+        <button
+          id="toggleThemeBtn"
+          type="button"
+          aria-label="Toggle Chapel Stage Mode"
+          title="Toggle Dark Stage Mode"
+          class="p-2 rounded-xl bg-ivory dark:bg-slate-800 text-ink dark:text-amber-300 border border-stone-300/80 dark:border-slate-700 transition"
+        >
+          <span id="themeIcon" class="text-sm leading-none">🌙</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Secondary Slim Control Strip (Clef Mode + Install PWA) -->
+    <div class="max-w-3xl mx-auto px-3 sm:px-5 py-1.5 bg-ivory/80 dark:bg-slate-900/80 border-t border-stone-200/80 dark:border-slate-800 flex items-center justify-between gap-2 text-xs">
+      <div class="inline-flex rounded-lg bg-stone-200/80 dark:bg-slate-800 p-0.5">
+        <button
+          type="button"
+          data-clef="grand"
+          class="clef-toggle-btn px-2.5 py-1 rounded-md text-[11px] font-bold bg-paper dark:bg-slate-700 text-ink dark:text-white shadow-sm transition"
+        >
+          Grand Staff (LH + RH)
+        </button>
+        <button
+          type="button"
+          data-clef="treble"
+          class="clef-toggle-btn px-2.5 py-1 rounded-md text-[11px] font-bold text-stone-600 dark:text-slate-400 transition"
+        >
+          Treble Only
+        </button>
+      </div>
+
+      <button
+        id="openInstallHelpBtn"
+        type="button"
+        class="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 dark:text-indigo-400 hover:underline px-2 py-1 rounded-lg"
+      >
+        <span>📲 Add to Phone</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Status Toast / Notification Banner -->
+  <div id="statusBanner" class="hidden max-w-3xl w-full mx-auto px-3 sm:px-5 pt-3">
+    <div id="statusBannerInner" class="rounded-xl px-4 py-2.5 text-xs font-semibold flex items-center justify-between gap-2 shadow-sm border">
+      <span id="statusBannerText"></span>
+      <button id="dismissBannerBtn" type="button" class="opacity-70 hover:opacity-100 font-bold">✕</button>
+    </div>
+  </div>
+
+  <!-- Scanning Overlay Loader -->
+  <div
+    id="scanningOverlay"
+    class="hidden fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-5"
+  >
+    <div class="bg-paper dark:bg-stageCard border border-stone-300 dark:border-slate-700 rounded-2xl p-6 max-w-sm w-full text-center space-y-3 shadow-2xl">
+      <div class="w-12 h-12 mx-auto rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-2xl font-serif scanning-pulse">
+        𝄞
+      </div>
+      <h3 class="font-bold text-base text-ink dark:text-white">Scanning chords &amp; lyrics...</h3>
+      <p class="text-xs text-stone-500 dark:text-slate-400 leading-relaxed">
+        Reading your music sheet and engraving Treble &amp; Bass staff notes aligned to every word.
+      </p>
+    </div>
+  </div>
+
+  <!-- Main Vertical Sheet Music & Lyrics Score Container -->
+  <main class="flex-1 max-w-3xl w-full mx-auto px-2.5 sm:px-5 pt-4 pb-10">
+    <article class="score-sheet rounded-2xl border border-stone-300/90 dark:border-slate-800 px-3 sm:px-6 py-5 sm:py-7">
+      <!-- Song Title & Key Header on the Printed Score -->
+      <div class="text-center pb-4 mb-5 border-b border-stone-200 dark:border-slate-800">
+        <h1 id="scoreTitleDisplay" class="font-serif text-2xl sm:text-3xl font-bold text-ink dark:text-slate-100 tracking-tight">
+          Amazing Grace
+        </h1>
+        <div class="mt-1.5 flex items-center justify-center gap-3 text-xs text-stone-500 dark:text-slate-400">
+          <span id="scoreKeyDisplay" class="font-semibold text-indigo-700 dark:text-indigo-400">Key: G Major</span>
+          <span>•</span>
+          <span>Tap any chord to hear it</span>
+        </div>
+      </div>
+
+      <!-- Vertically Stacked Lines (SVG Staff + Aligned Lyrics) -->
+      <div id="verticalScoreContainer" class="space-y-5 w-full">
+        <!-- Rendered dynamically by JS to fit 100% container width -->
+      </div>
+    </article>
+  </main>
+
+  <!-- Floating Bottom Worship Bar (Auto-Scroll + Transpose) -->
+  <nav
+    aria-label="Worship Stage Controls"
+    class="fixed bottom-0 inset-x-0 z-30 bg-paper/95 dark:bg-stage/95 backdrop-blur-md border-t border-stone-300 dark:border-slate-800 shadow-[0_-6px_24px_rgba(0,0,0,0.08)]"
+  >
+    <div class="max-w-3xl mx-auto px-3 sm:px-5 py-2.5 flex items-center justify-between gap-2">
+      <!-- Auto-Scroll Controls -->
+      <div class="flex items-center gap-1.5 sm:gap-2">
+        <button
+          id="autoScrollBtn"
+          type="button"
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-ink dark:bg-indigo-600 text-paper dark:text-white shadow-sm active:scale-95 transition"
+        >
+          <span id="autoScrollIcon">▶</span>
+          <span id="autoScrollLabel">Auto-Scroll</span>
+        </button>
+
+        <!-- Speed Selector Pills -->
+        <div class="inline-flex rounded-xl bg-ivory dark:bg-slate-800 p-0.5 border border-stone-300/80 dark:border-slate-700">
+          <button type="button" data-speed="1" class="speed-btn px-2 py-1.5 rounded-lg text-[11px] font-bold text-stone-600 dark:text-slate-400">Slow</button>
+          <button type="button" data-speed="2" class="speed-btn px-2 py-1.5 rounded-lg text-[11px] font-bold bg-paper dark:bg-slate-700 text-ink dark:text-white shadow-sm">Med</button>
+          <button type="button" data-speed="3" class="speed-btn px-2 py-1.5 rounded-lg text-[11px] font-bold text-stone-600 dark:text-slate-400">Fast</button>
+        </div>
+      </div>
+
+      <!-- Quick Transpose Controls (- / + semitones) -->
+      <div class="flex items-center gap-1.5 bg-ivory dark:bg-slate-800 px-2 py-1 rounded-xl border border-stone-300/80 dark:border-slate-700">
+        <button
+          id="transposeDownBtn"
+          type="button"
+          aria-label="Transpose down half step"
+          class="w-8 h-8 rounded-lg bg-paper dark:bg-slate-700 hover:bg-stone-200 text-ink dark:text-white font-bold text-base flex items-center justify-center shadow-sm active:scale-95 transition"
+        >
+          −
+        </button>
+        <div class="px-1.5 text-center min-w-[54px]">
+          <span class="block text-[9px] font-bold uppercase tracking-wider text-stone-400">Key Shift</span>
+          <span id="transposeBadge" class="text-xs font-bold text-indigo-700 dark:text-indigo-400">0</span>
+        </div>
+        <button
+          id="transposeUpBtn"
+          type="button"
+          aria-label="Transpose up half step"
+          class="w-8 h-8 rounded-lg bg-paper dark:bg-slate-700 hover:bg-stone-200 text-ink dark:text-white font-bold text-base flex items-center justify-center shadow-sm active:scale-95 transition"
+        >
+          +
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MODAL 1: Chapel Setlist / Saved Songs Drawer -->
+  <div
+    id="setlistModal"
+    class="hidden fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center"
+  >
+    <div class="bg-paper dark:bg-stageCard w-full max-w-lg rounded-t-3xl sm:rounded-2xl border border-stone-300 dark:border-slate-700 p-5 max-h-[85vh] flex flex-col shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-slate-800">
+        <div>
+          <h2 class="font-bold text-lg text-ink dark:text-white">Chapel Setlist</h2>
+          <p class="text-xs text-stone-500 dark:text-slate-400">Tap a song to load its vertical sheet music</p>
+        </div>
+        <button id="closeSetlistBtn" type="button" class="p-2 rounded-xl text-stone-500 hover:bg-stone-200/70 dark:hover:bg-slate-800 font-bold">✕</button>
+      </div>
+
+      <div id="setlistItemsContainer" class="flex-1 overflow-y-auto py-3 space-y-2">
+        <!-- Song list populated by JS -->
+      </div>
+
+      <div class="pt-3 border-t border-stone-200 dark:border-slate-800 grid grid-cols-2 gap-2">
+        <button
+          id="setlistScanBtn"
+          type="button"
+          class="py-2.5 px-3 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+        >
+          📷 Scan New Song
+        </button>
+        <button
+          id="setlistNewPasteBtn"
+          type="button"
+          class="py-2.5 px-3 rounded-xl text-xs font-bold bg-ivory dark:bg-slate-800 text-ink dark:text-white border border-stone-300 dark:border-slate-700"
+        >
+          ✎ Paste / Type Song
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: Quick Paste / Edit ChordPro or Chords-Above-Lyrics -->
+  <div
+    id="pasteModal"
+    class="hidden fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center"
+  >
+    <div class="bg-paper dark:bg-stageCard w-full max-w-lg rounded-t-3xl sm:rounded-2xl border border-stone-300 dark:border-slate-700 p-5 max-h-[90vh] flex flex-col shadow-2xl space-y-3">
+      <div class="flex items-center justify-between pb-2 border-b border-stone-200 dark:border-slate-800">
+        <div>
+          <h2 class="font-bold text-lg text-ink dark:text-white">Quick Paste or Edit Song</h2>
+          <p class="text-xs text-stone-500 dark:text-slate-400">Paste chords-above-lyrics or bracketed [G]chords</p>
+        </div>
+        <button id="closePasteModalBtn" type="button" class="p-2 rounded-xl text-stone-500 hover:bg-stone-200/70 dark:hover:bg-slate-800 font-bold">✕</button>
+      </div>
+
+      <div>
+        <label for="songTitleInput" class="block text-xs font-bold uppercase tracking-wider text-stone-500 dark:text-slate-400 mb-1">
+          Song Title
+        </label>
+        <input
+          id="songTitleInput"
+          type="text"
+          placeholder="e.g., Great Is Thy Faithfulness"
+          class="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-stone-300 dark:border-slate-700 text-sm font-semibold text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </div>
+
+      <div class="flex-1 flex flex-col min-h-0">
+        <div class="flex items-center justify-between mb-1">
+          <label for="songBodyInput" class="text-xs font-bold uppercase tracking-wider text-stone-500 dark:text-slate-400">
+            Chords &amp; Lyrics
+          </label>
+          <span class="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">Auto-converts Ultimate Guitar / CCLI paste</span>
+        </div>
+        <textarea
+          id="songBodyInput"
+          rows="9"
+          placeholder="[Verse 1]&#10;G             C          G&#10;Amazing grace how sweet the sound&#10;              Em       D&#10;That saved a wretch like me"
+          class="w-full flex-1 px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-stone-300 dark:border-slate-700 text-xs sm:text-sm font-mono text-ink dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 leading-relaxed"
+        ></textarea>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button
+          id="cancelPasteBtn"
+          type="button"
+          class="px-4 py-2.5 rounded-xl text-xs font-bold text-stone-600 dark:text-slate-300 hover:bg-stone-200/70 dark:hover:bg-slate-800"
+        >
+          Cancel
+        </button>
+        <button
+          id="saveSongBtn"
+          type="button"
+          class="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+        >
+          Save &amp; Engrave Sheet Music
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: PWA "Add to Phone Home Screen" Helper -->
+  <div
+    id="installHelpModal"
+    class="hidden fixed inset-0 z-50 bg-slate-950/65 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4"
+  >
+    <div class="bg-paper dark:bg-stageCard w-full max-w-md rounded-t-3xl sm:rounded-2xl border border-stone-300 dark:border-slate-700 p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between pb-2 border-b border-stone-200 dark:border-slate-800">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-serif text-xl font-bold">𝄞</div>
+          <div>
+            <h2 class="font-bold text-base text-ink dark:text-white">Install ChapelKeys on Phone</h2>
+            <p class="text-[11px] text-stone-500 dark:text-slate-400">Use full-screen on your piano music stand</p>
+          </div>
+        </div>
+        <button id="closeInstallHelpBtn" type="button" class="p-2 rounded-xl text-stone-500 font-bold">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="p-3.5 rounded-xl bg-ivory dark:bg-slate-800/90 border border-stone-200 dark:border-slate-700">
+          <div class="font-bold text-sm text-ink dark:text-white mb-1">🍎 iPhone / iPad (Safari)</div>
+          <ol class="list-decimal list-inside space-y-1 text-stone-600 dark:text-slate-300">
+            <li>Tap the <strong>Share</strong> icon (<span class="font-mono">⍗</span>) at the bottom of Safari.</li>
+            <li>Scroll down and tap <strong>"Add to Home Screen"</strong>.</li>
+          </ol>
+        </div>
+
+        <div class="p-3.5 rounded-xl bg-ivory dark:bg-slate-800/90 border border-stone-200 dark:border-slate-700">
+          <div class="font-bold text-sm text-ink dark:text-white mb-1">🤖 Android (Chrome)</div>
+          <ol class="list-decimal list-inside space-y-1 text-stone-600 dark:text-slate-300">
+            <li>Tap the <strong>three dots menu (⋮)</strong> in the top-right corner.</li>
+            <li>Tap <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.</li>
+          </ol>
+        </div>
+      </div>
+
+      <button
+        id="gotItInstallBtn"
+        type="button"
+        class="w-full py-2.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow-sm"
+      >
+        Got It
+      </button>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * ============================================================================
+     * 1. PWA MANIFEST & OFFLINE SERVICE WORKER REGISTRATION
+     * ============================================================================
+     */
+    (function setupPWA() {
+      try {
+        const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="110" fill="#4F46E5"/><text x="256" y="345" font-size="290" text-anchor="middle" fill="#FFFFFF" font-family="serif">𝄞</text></svg>`;
+        const iconUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(iconSvg)}`;
+
+        const manifest = {
+          name: 'ChapelKeys — Worship Sheet Music Reader',
+          short_name: 'ChapelKeys',
+          description: 'Vertical scrolling chord-to-sheet-music reader with aligned worship lyrics.',
+          start_url: '.',
+          display: 'standalone',
+          background_color: '#FCFBF7',
+          theme_color: '#1E293B',
+          icons: [
+            { src: iconUrl, sizes: '192x192', type: 'image/svg+xml' },
+            { src: iconUrl, sizes: '512x512', type: 'image/svg+xml' }
+          ]
+        };
+
+        const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+        const manifestLink = document.createElement('link');
+        manifestLink.rel = 'manifest';
+        manifestLink.href = URL.createObjectURL(manifestBlob);
+        document.head.appendChild(manifestLink);
+
+        if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+          const swCode = `
+            const CACHE_NAME = 'chapelkeys-v1';
+            self.addEventListener('install', (e) => {
+              self.skipWaiting();
+            });
+            self.addEventListener('activate', (e) => {
+              e.waitUntil(clients.claim());
+            });
+            self.addEventListener('fetch', (e) => {
+              if (e.request.method !== 'GET') return;
+              e.respondWith(
+                fetch(e.request)
+                  .then((res) => {
+                    const copy = res.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(e.request, copy));
+                    return res;
+                  })
+                  .catch(() => caches.match(e.request))
+              );
+            });
+          `;
+          const swBlob = new Blob([swCode], { type: 'application/javascript' });
+          navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(() => {});
+        }
+      } catch (err) {
+        // Sandboxed preview environments may restrict blob service workers
+      }
+    })();
+
+    /**
+     * ============================================================================
+     * 2. PRELOADED PUBLIC DOMAIN CHAPEL WORSHIP SONGS
+     * ============================================================================
+     */
+    const DEFAULT_SONGS = [
+      {
+        id: 'amazing-grace',
+        title: 'Amazing Grace',
+        content: `[Verse 1]
+[G]Amazing [G7]grace how [C]sweet the [G]sound
+That saved a [Em]wretch like [D]me
+I [G]once was [G7]lost but [C]now am [G]found
+Was blind but [D]now I [G]see
+
+[Verse 2]
+'Twas [G]grace that [G7]taught my [C]heart to [G]fear
+And grace my [Em]fears re-[D]lieved
+How [G]precious [G7]did that [C]grace ap-[G]pear
+The hour I [D]first be-[G]lieved
+
+[Verse 3]
+Through [G]many [G7]dangers, [C]toils and [G]snares
+I have al-[Em]ready [D]come
+'Tis [G]grace hath [G7]brought me [C]safe thus [G]far
+And grace will [D]lead me [G]home`
+      },
+      {
+        id: 'be-thou-my-vision',
+        title: 'Be Thou My Vision',
+        content: `[Verse 1]
+[D]Be Thou my [Bm]Vision, O [G]Lord of my [D]heart
+[A]Naught be all else to me, [G]save that Thou [A]art
+[Bm]Thou my best [G]Thought, by [D]day or by [G]night
+[D]Waking or [Bm]sleeping, Thy [G]presence my [D]light
+
+[Verse 2]
+[D]Be Thou my [Bm]Wisdom, and [G]Thou my true [D]Word
+[A]I ever with Thee and [G]Thou with me, [A]Lord
+[Bm]Thou my great [G]Father, I [D]Thy true [G]son
+[D]Thou in me [Bm]dwelling, and [G]I with Thee [D]one
+
+[Verse 3]
+[D]High King of [Bm]Heaven, my [G]victory [D]won
+[A]May I reach Heaven's joys, [G]O bright Heaven's [A]Sun
+[Bm]Heart of my [G]own heart, what-[D]ever be-[G]fall
+[D]Still be my [Bm]Vision, O [G]Ruler of [D]all`
+      },
+      {
+        id: 'it-is-well',
+        title: 'It Is Well With My Soul',
+        content: `[Verse 1]
+When [C]peace like a [G]river at-[Am]tendeth my [F]way
+When [Dm]sorrows like [G]sea billows [C]roll
+What-[C]ever my [E]lot, Thou hast [Am]taught me to [F]say
+It is [C]well, it is [G]well with my [C]soul
+
+[Chorus]
+It is [C]well with my [G]soul
+It is [F]well, it is [G]well with my [C]soul
+
+[Verse 2]
+My [C]sin, O the [G]bliss of this [Am]glorious [F]thought
+My [Dm]sin, not in [G]part but the [C]whole
+Is [C]nailed to the [E]cross, and I [Am]bear it no [F]more
+Praise the [C]Lord, praise the [G]Lord, O my [C]soul`
+      },
+      {
+        id: 'holy-holy-holy',
+        title: 'Holy, Holy, Holy',
+        content: `[Verse 1]
+[D]Holy, [Bm]holy, [A]holy! [D]Lord [G]God Al-[D]mighty!
+[A]Early in the [D]morning our [Bm]song shall [E]rise to [A]Thee
+[D]Holy, [Bm]holy, [A]holy! [D]Merci-[G]ful and [D]mighty!
+[Bm]God in three [G]Persons, [A]blessed Trin-[D]ity!
+
+[Verse 2]
+[D]Holy, [Bm]holy, [A]holy! [D]All the [G]saints a-[D]dore Thee
+[A]Casting down their [D]golden crowns a-[Bm]round the [E]glassy [A]sea
+[D]Cherubim and [Bm]seraphim [A]falling [D]down be-[G]fore [D]Thee
+[Bm]Who wert, and [G]art, and [A]evermore shalt [D]be`
+      }
+    ];
+
+    /**
+     * ============================================================================
+     * 3. MUSIC THEORY, TRANSPOSITION & CHORD-TO-NOTE SPELLING ENGINE
+     * ============================================================================
+     */
+    const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+    const NATURAL_SEMITONES = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+
+    // Preferred spellings for transposed pitch classes (friendly worship keys)
+    const PC_SPELLINGS = [
+      { letter: 'C', acc: '' },
+      { letter: 'D', acc: 'b' },
+      { letter: 'D', acc: '' },
+      { letter: 'E', acc: 'b' },
+      { letter: 'E', acc: '' },
+      { letter: 'F', acc: '' },
+      { letter: 'F', acc: '#' },
+      { letter: 'G', acc: '' },
+      { letter: 'A', acc: 'b' },
+      { letter: 'A', acc: '' },
+      { letter: 'B', acc: 'b' },
+      { letter: 'B', acc: '' }
+    ];
+
+    const CHORD_QUALITIES = {
+      '': [{ step: 0, semi: 0 }, { step: 2, semi: 4 }, { step: 4, semi: 7 }],
+      'maj': [{ step: 0, semi: 0 }, { step: 2, semi: 4 }, { step: 4, semi: 7 }],
+      'm': [{ step: 0, semi: 0 }, { step: 2, semi: 3 }, { step: 4, semi: 7 }],
+      'min': [{ step: 0, semi: 0 }, { step: 2, semi: 3 }, { step: 4, semi: 7 }],
+      '-': [{ step: 0, semi: 0 }, { step: 2, semi: 3 }, { step: 4, semi: 7 }],
+      '7': [{ step: 0, semi: 0 }, { step: 2, semi: 4 }, { step: 4, semi: 7 }, { step: 6, semi: 10 }],
+      'maj7': [{ step: 0, semi: 0 }, { step: 2, semi: 4 }, { step: 4, semi: 7 }, { step: 6, semi: 11 }],
+      'M7': [{ step: 0, semi: 0 }, { step: 2, semi: 4 }, { step: 4, semi: 7 }, { step: 6, semi: 11 }],
+      'm7': [{ step: 0, semi: 0 }, { step: 2, semi: 3 }, { step: 4, semi: 7 }, { step: 6, semi: 10 }],
+      'min7': [{ step: 0, semi: 0 }, { step: 2, semi: 3 }, { step: 4, semi: 7 }, { step: 6, semi: 10 }],
+      'dim': [{ step: 0, semi: 0 }, { step: 2, semi: 3 }, { step: 4, semi: 6 }],
+      'dim7': [{ step: 0, semi: 0 }, { step: 2, semi: 3 }, { step: 4, semi: 6 }, { step: 6, semi: 9 }],
+      'm7b5': [{ step: 0, semi: 0 }, { step: 2, semi: 3 }, { step: 4, semi: 6 }, { step: 6, semi: 10 }],
+      'aug': [{ step: 0, semi: 0 }, { step: 2, semi: 4 }, { step: 4, semi: 8 }],
+      '+': [{ step: 0, semi: 0 }, { step: 2, semi: 4 }, { step: 4, semi: 8 }],
+      'sus2': [{ step: 0, semi: 0 }, { step: 1, semi: 2 }, { step: 4, semi: 7 }],
+      'sus4': [{ step: 0, semi: 0 }, { step: 3, semi: 5 }, { step: 4, semi: 7 }],
+      'sus': [{ step: 0, semi: 0 }, { step: 3, semi: 5 }, { step: 4, semi: 7 }],
+      '2': [{ step: 0, semi: 0 }, { step: 1, semi: 2 }, { step: 2, semi: 4 }, { step: 4, semi: 7 }],
+      'add9': [{ step: 0, semi: 0 }, { step: 1, semi: 2 }, { step: 2, semi: 4 }, { step: 4, semi: 7 }],
+      '6': [{ step: 0, semi: 0 }, { step: 2, semi: 4 }, { step: 4, semi: 7 }, { step: 5, semi: 9 }],
+      'm6': [{ step: 0, semi: 0 }, { step: 2, semi: 3 }, { step: 4, semi: 7 }, { step: 5, semi: 9 }],
+      '9': [{ step: 0, semi: 0 }, { step: 2, semi: 4 }, { step: 4, semi: 7 }, { step: 6, semi: 10 }, { step: 8, semi: 14 }]
+    };
+
+    function accToOffset(acc) {
+      if (acc === '#') return 1;
+      if (acc === '##') return 2;
+      if (acc === 'b') return -1;
+      if (acc === 'bb') return -2;
+      return 0;
+    }
+
+    function offsetToUnicode(offset) {
+      if (offset === -2) return '𝄫';
+      if (offset === -1) return '♭';
+      if (offset === 1) return '♯';
+      if (offset === 2) return '𝄪';
+      return '';
+    }
+
+    function buildSpelledNote(letter, targetPc, octave) {
+      const natPc = NATURAL_SEMITONES[letter];
+      let diff = (targetPc - natPc) % 12;
+      if (diff > 6) diff -= 12;
+      if (diff < -6) diff += 12;
+
+      const accidentalSymbol = offsetToUnicode(diff);
+      const midi = (octave + 1) * 12 + natPc + diff;
+      const diatonicStep = octave * 7 + LETTERS.indexOf(letter);
+
+      return {
+        letter,
+        accidentalOffset: diff,
+        accidentalSymbol,
+        octave,
+        midi,
+        diatonicStep,
+        name: `${letter}${accidentalSymbol}`
+      };
+    }
+
+    function transposePitchClass(letter, acc, semitoneShift) {
+      const origPc = (NATURAL_SEMITONES[letter] + accToOffset(acc) + 12) % 12;
+      if (semitoneShift === 0) {
+        return { letter, acc, pc: origPc };
+      }
+      const newPc = (origPc + semitoneShift + 120) % 12;
+      const spelled = PC_SPELLINGS[newPc];
+      return { letter: spelled.letter, acc: spelled.acc, pc: newPc };
+    }
+
+    /**
+     * Parses a chord symbol (with optional transposition) into Treble RH + Bass LH notes.
+     */
+    function parseAndVoiceChord(rawSymbol, transposeSemitones = 0, clefMode = 'grand') {
+      const cleaned = rawSymbol.trim().replace(/♯/g, '#').replace(/♭/g, 'b');
+      const match = cleaned.match(/^([A-Ga-g])(#|b)?([^/]*)(?:\/([A-Ga-g])(#|b)?)?$/);
+      if (!match) return null;
+
+      const origRootLetter = match[1].toUpperCase();
+      const origRootAcc = match[2] || '';
+      const rawQuality = (match[3] || '').trim();
+      const origBassLetter = match[4] ? match[4].toUpperCase() : null;
+      const origBassAcc = match[5] || '';
+
+      const intervals = CHORD_QUALITIES[rawQuality] || CHORD_QUALITIES[rawQuality.toLowerCase()];
+      if (!intervals) return null;
+
+      // Transpose Root
+      const tRoot = transposePitchClass(origRootLetter, origRootAcc, transposeSemitones);
+      const rootLetterIdx = LETTERS.indexOf(tRoot.letter);
+
+      // Build Right-Hand Treble Triad / 7th
+      const trebleNotes = [];
+      let prevMidi = -1;
+
+      intervals.forEach((iv) => {
+        const noteLetter = LETTERS[(rootLetterIdx + iv.step) % 7];
+        const targetPc = (tRoot.pc + iv.semi + 120) % 12;
+
+        let octave = 4;
+        let candidate = buildSpelledNote(noteLetter, targetPc, octave);
+
+        if (prevMidi === -1) {
+          // Place A/B roots in octave 3 so chords sit nicely inside Treble Staff
+          if (tRoot.letter === 'A' || tRoot.letter === 'B') {
+            octave = 3;
+            candidate = buildSpelledNote(noteLetter, targetPc, octave);
+          }
+        } else {
+          while (candidate.midi <= prevMidi) {
+            octave += 1;
+            candidate = buildSpelledNote(noteLetter, targetPc, octave);
+          }
+        }
+        prevMidi = candidate.midi;
+        trebleNotes.push(candidate);
+      });
+
+      // Transpose Bass (or use transposed root)
+      const tBass = origBassLetter
+        ? transposePitchClass(origBassLetter, origBassAcc, transposeSemitones)
+        : tRoot;
+
+      let bassOctave = 2;
+      if (tBass.letter === 'C' || tBass.letter === 'D' || tBass.letter === 'E') {
+        bassOctave = 3;
+      }
+      const bassNote = buildSpelledNote(tBass.letter, tBass.pc, bassOctave);
+      const bassNotes = clefMode === 'grand' ? [bassNote] : [];
+
+      const displayRoot = `${tRoot.letter}${offsetToUnicode(accToOffset(tRoot.acc))}`;
+      const displayBass = origBassLetter
+        ? `/${tBass.letter}${offsetToUnicode(accToOffset(tBass.acc))}`
+        : '';
+      const displaySymbol = `${displayRoot}${rawQuality}${displayBass}`;
+
+      return {
+        displaySymbol,
+        trebleNotes,
+        bassNotes,
+        allNotes: [...bassNotes, ...trebleNotes]
+      };
+    }
+
+
+    /**
+     * ============================================================================
+     * 4. SMART CHORDPRO & CHORDS-ABOVE-LYRICS PARSER
+     * ============================================================================
+     */
+    const CHORD_TOKEN_REGEX = /^[A-Ga-g](#|b|♯|♭)?(maj7|min7|m7b5|dim7|maj|min|m7|m6|m|7|dim|aug|\+|sus2|sus4|sus|add9|2|6|9|M7|-7|-)?(\/[A-Ga-g](#|b|♯|♭)?)?$/;
+
+    function isChordLine(line) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.includes('[')) return false;
+      const tokens = trimmed.split(/\s+/).filter((t) => t !== '|');
+      if (tokens.length === 0) return false;
+      const validCount = tokens.filter((t) => CHORD_TOKEN_REGEX.test(t)).length;
+      return validCount > 0 && validCount / tokens.length >= 0.75;
+    }
+
+    /**
+     * Converts raw pasted text (either ChordPro `[G]Amazing [C]grace` OR
+     * two-line `G       C\nAmazing grace`) into normalized ChordPro lines.
+     */
+    function normalizeToChordPro(rawText) {
+      const rawLines = rawText.replace(/\r\n/g, '\n').split('\n');
+      const output = [];
+
+      for (let i = 0; i < rawLines.length; i++) {
+        const line = rawLines[i];
+        const nextLine = rawLines[i + 1];
+
+        if (isChordLine(line)) {
+          // Extract chord tokens and their character column indices
+          const chordMatches = [];
+          const regex = /\S+/g;
+          let m;
+          while ((m = regex.exec(line)) !== null) {
+            if (CHORD_TOKEN_REGEX.test(m[0])) {
+              chordMatches.push({ chord: m[0], col: m.index });
+            }
+          }
+
+          if (nextLine !== undefined && nextLine.trim() !== '' && !isChordLine(nextLine) && !nextLine.trim().startsWith('[')) {
+            // Merge chords into the lyric line at matching character columns
+            let merged = nextLine;
+            // Insert from right to left so indices stay valid
+            for (let c = chordMatches.length - 1; c >= 0; c--) {
+              const { chord, col } = chordMatches[c];
+              if (col >= merged.length) {
+                merged = merged.padEnd(col, ' ') + `[${chord}]`;
+              } else {
+                merged = merged.slice(0, col) + `[${chord}]` + merged.slice(col);
+              }
+            }
+            output.push(merged);
+            i++; // Skip consumed lyric line
+          } else {
+            // Standalone instrumental chord line
+            output.push(chordMatches.map((cm) => `[${cm.chord}]`).join('   '));
+          }
+        } else {
+          output.push(line);
+        }
+      }
+
+      return output.join('\n');
+    }
+
+    /**
+     * Parses a normalized ChordPro document into structured sections and lines.
+     * Each line contains an array of segments: { chord: string|null, text: string }
+     */
+    function parseSongLines(chordProText) {
+      const normalized = normalizeToChordPro(chordProText);
+      const lines = normalized.split('\n');
+      const structured = [];
+
+      lines.forEach((rawLine) => {
+        const trimmed = rawLine.trim();
+        if (!trimmed) return;
+
+        // Check if line is a section header like [Verse 1], [Chorus], [Bridge]
+        const sectionMatch = trimmed.match(/^\[([^\]]+)\]$/);
+        if (sectionMatch && !CHORD_TOKEN_REGEX.test(sectionMatch[1].trim())) {
+          structured.push({ type: 'section', label: sectionMatch[1].trim() });
+          return;
+        }
+
+        // Parse inline [Chord]text segments
+        const segments = [];
+        const regex = /\[([^\]]+)\]/g;
+        let lastIndex = 0;
+        let match;
+
+        while ((match = regex.exec(rawLine)) !== null) {
+          if (match.index > lastIndex) {
+            const leadingText = rawLine.slice(lastIndex, match.index);
+            if (segments.length === 0) {
+              segments.push({ chord: null, text: leadingText });
+            } else {
+              segments[segments.length - 1].text += leadingText;
+            }
+          }
+
+          const token = match[1].trim();
+          if (CHORD_TOKEN_REGEX.test(token)) {
+            segments.push({ chord: token, text: '' });
+          } else {
+            // Inline non-chord bracketed note
+            if (segments.length === 0) {
+              segments.push({ chord: null, text: `[${token}]` });
+            } else {
+              segments[segments.length - 1].text += `[${token}]`;
+            }
+          }
+          lastIndex = regex.lastIndex;
+        }
+
+        if (lastIndex < rawLine.length) {
+          const tail = rawLine.slice(lastIndex);
+          if (segments.length === 0) {
+            segments.push({ chord: null, text: tail });
+          } else {
+            segments[segments.length - 1].text += tail;
+          }
+        }
+
+        if (segments.length > 0) {
+          structured.push({ type: 'musicLine', segments });
+        }
+      });
+
+      return structured;
+    }
+
+
+    /**
+     * ============================================================================
+     * 5. WEB AUDIO PIANO SYNTHESIZER (TAP ANY CHORD TO HEAR IT)
+     * ============================================================================
+     */
+    class ChapelPianoAudio {
+      constructor() {
+        this.ctx = null;
+      }
+
+      playChord(notes, duration = 1.25) {
+        if (!notes || notes.length === 0) return;
+        try {
+          if (!this.ctx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioCtx();
+          }
+          if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
+          }
+
+          const now = this.ctx.currentTime;
+          const gainPerNote = Math.min(0.22, 0.62 / Math.sqrt(notes.length));
+
+          notes.forEach((n, idx) => {
+            const freq = 440 * Math.pow(2, (n.midi - 69) / 12);
+            const osc1 = this.ctx.createOscillator();
+            const osc2 = this.ctx.createOscillator();
+            const filter = this.ctx.createBiquadFilter();
+            const gain = this.ctx.createGain();
+
+            osc1.type = 'triangle';
+            osc1.frequency.setValueAtTime(freq, now + idx * 0.012);
+
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(freq * 2, now + idx * 0.012);
+
+            const overtoneGain = this.ctx.createGain();
+            overtoneGain.gain.setValueAtTime(0.15, now);
+
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(1750, now);
+            filter.frequency.exponentialRampToValueAtTime(420, now + duration);
+
+            gain.gain.setValueAtTime(0.0001, now + idx * 0.012);
+            gain.gain.linearRampToValueAtTime(gainPerNote, now + idx * 0.012 + 0.018);
+            gain.gain.exponentialRampToValueAtTime(0.0008, now + duration);
+
+            osc1.connect(filter);
+            osc2.connect(overtoneGain);
+            overtoneGain.connect(filter);
+            filter.connect(gain);
+            gain.connect(this.ctx.destination);
+
+            osc1.start(now + idx * 0.012);
+            osc2.start(now + idx * 0.012);
+            osc1.stop(now + duration + 0.05);
+            osc2.stop(now + duration + 0.05);
+          });
+        } catch (e) {
+          // Audio blocked or unsupported
+        }
+      }
+    }
+
+    const pianoAudio = new ChapelPianoAudio();
+
+
+    /**
+     * ============================================================================
+     * 6. RESPONSIVE VERTICAL SVG GRAND STAFF + ALIGNED LYRICS ENGRAVER
+     * ============================================================================
+     */
+    const ENGRAVE = {
+      lineGap: 8.5,          // Distance between staff lines (compact & crisp for phones)
+      halfStep: 4.25,        // Vertical distance per diatonic step
+      trebleTopY: 34,        // Top line of Treble Staff (F5 = step 38)
+      bassTopY: 96,          // Top line of Bass Staff (A3 = step 26)
+      clefMargin: 52         // Left space for brace + clefs
+    };
+
+    function stepToY(diatonicStep, clef) {
+      if (clef === 'treble') {
+        return ENGRAVE.trebleTopY + (38 - diatonicStep) * ENGRAVE.halfStep;
+      }
+      return ENGRAVE.bassTopY + (26 - diatonicStep) * ENGRAVE.halfStep;
+    }
+
+    function layoutStaffNotes(notes, clef) {
+      const sorted = [...notes].sort((a, b) => a.diatonicStep - b.diatonicStep);
+      let prevShifted = false;
+
+      const laidOut = sorted.map((n, i) => {
+        let shiftRight = false;
+        if (i > 0 && n.diatonicStep - sorted[i - 1].diatonicStep === 1 && !prevShifted) {
+          shiftRight = true;
+        }
+        prevShifted = shiftRight;
+        return { ...n, y: stepToY(n.diatonicStep, clef), shiftRight, accCol: 0 };
+      });
+
+      const placedAcc = [];
+      for (let i = laidOut.length - 1; i >= 0; i--) {
+        const item = laidOut[i];
+        if (!item.accidentalSymbol) continue;
+        let col = 0;
+        while (placedAcc.some((p) => p.col === col && Math.abs(p.step - item.diatonicStep) <= 3)) {
+          col++;
+        }
+        item.accCol = col;
+        placedAcc.push({ step: item.diatonicStep, col });
+      }
+      return laidOut;
+    }
+
+    function buildLedgerLines(notes, cx, clef, strokeColor) {
+      const minStep = clef === 'treble' ? 30 : 18;
+      const maxStep = clef === 'treble' ? 38 : 26;
+      const steps = new Set();
+
+      notes.forEach((n) => {
+        if (n.diatonicStep <= minStep - 2) {
+          for (let s = minStep - 2; s >= n.diatonicStep; s -= 2) steps.add(s);
+        }
+        if (n.diatonicStep >= maxStep + 2) {
+          for (let s = maxStep + 2; s <= n.diatonicStep; s += 2) steps.add(s);
+        }
+      });
+
+      let svg = '';
+      steps.forEach((s) => {
+        const y = stepToY(s, clef);
+        svg += `<line x1="${cx - 12}" y1="${y}" x2="${cx + 13}" y2="${y}" stroke="${strokeColor}" stroke-width="1.2" />`;
+      });
+      return svg;
+    }
+
+    /**
+     * Splits a music line into sub-lines if the phone screen is narrow so chords
+     * never crowd or overlap horizontally.
+     */
+    function wrapSegmentsForWidth(segments, availableWidth) {
+      const usableWidth = Math.max(220, availableWidth - ENGRAVE.clefMargin - 14);
+      const minColWidth = 66; // Minimum horizontal px per chord stack
+      const maxChordsPerRow = Math.max(2, Math.floor(usableWidth / minColWidth));
+
+      const rows = [];
+      let currentRow = [];
+      let chordCount = 0;
+
+      segments.forEach((seg) => {
+        if (seg.chord) {
+          if (chordCount >= maxChordsPerRow && currentRow.length > 0) {
+            rows.push(currentRow);
+            currentRow = [];
+            chordCount = 0;
+          }
+          chordCount++;
+        }
+        currentRow.push(seg);
+      });
+
+      if (currentRow.length > 0) {
+        rows.push(currentRow);
+      }
+
+      return rows;
+    }
+
+    /**
+     * Renders one responsive system (SVG Grand/Treble Staff + aligned lyrics underneath).
+     */
+    function renderSystemBlock(segments, containerWidth, clefMode, transposeSemitones, isDark, chordRegistry) {
+      const isGrand = clefMode === 'grand';
+      const svgWidth = Math.max(280, Math.floor(containerWidth));
+      const trebleBottomY = ENGRAVE.trebleTopY + 4 * ENGRAVE.lineGap;
+      const bassBottomY = ENGRAVE.bassTopY + 4 * ENGRAVE.lineGap;
+      const svgHeight = isGrand ? bassBottomY + 18 : trebleBottomY + 20;
+
+      const inkColor = isDark ? '#F1F5F9' : '#1E293B';
+      const staffLineColor = isDark ? '#475569' : '#64748B';
+      const paperFill = isDark ? '#141B29' : '#FCFBF7';
+      const trebleAccent = isDark ? '#818CF8' : '#3730A3';
+      const bassAccent = isDark ? '#FBBF24' : '#B45309';
+
+      // Compute proportional X positions for each segment across the available staff width
+      const startX = ENGRAVE.clefMargin;
+      const endX = svgWidth - 10;
+      const usableW = Math.max(160, endX - startX);
+
+      // Weight each segment by its lyric length (minimum weight for chord spacing)
+      const weights = segments.map((seg) => {
+        const textLen = (seg.text || '').trim().length;
+        return Math.max(seg.chord ? 7 : 3, textLen + (seg.chord ? 3 : 0));
+      });
+      const totalWeight = weights.reduce((a, b) => a + b, 0);
+
+      let cursorX = startX;
+      const positioned = segments.map((seg, idx) => {
+        const segWidth = (weights[idx] / totalWeight) * usableW;
+        const noteCenterX = cursorX + Math.min(22, segWidth * 0.35);
+        const item = {
+          ...seg,
+          leftX: cursorX,
+          width: segWidth,
+          noteCenterX
+        };
+        cursorX += segWidth;
+        return item;
+      });
+
+      let svg = `<svg width="100%" height="${svgHeight}" viewBox="0 0 ${svgWidth} ${svgHeight}" class="block overflow-visible select-none">`;
+
+      // System Left Barline & Grand Staff Curly Brace
+      const sysTop = ENGRAVE.trebleTopY;
+      const sysBottom = isGrand ? bassBottomY : trebleBottomY;
+      svg += `<line x1="16" y1="${sysTop}" x2="16" y2="${sysBottom}" stroke="${inkColor}" stroke-width="1.6" />`;
+
+      if (isGrand) {
+        const midY = (sysTop + sysBottom) / 2;
+        svg += `
+          <path d="M 13 ${sysTop}
+                   C 5 ${sysTop + 9}, 12 ${midY - 12}, 4 ${midY}
+                   C 12 ${midY + 12}, 5 ${sysBottom - 9}, 13 ${sysBottom}
+                   C 8 ${sysBottom - 10}, 15 ${midY + 11}, 7 ${midY}
+                   C 15 ${midY - 11}, 8 ${sysTop + 10}, 13 ${sysTop} Z"
+                fill="${inkColor}" />
+        `;
+      }
+
+      // 5 Staff Lines (Treble + optional Bass)
+      for (let i = 0; i < 5; i++) {
+        const ty = ENGRAVE.trebleTopY + i * ENGRAVE.lineGap;
+        svg += `<line x1="16" y1="${ty}" x2="${endX}" y2="${ty}" stroke="${staffLineColor}" stroke-width="1" />`;
+
+        if (isGrand) {
+          const by = ENGRAVE.bassTopY + i * ENGRAVE.lineGap;
+          svg += `<line x1="16" y1="${by}" x2="${endX}" y2="${by}" stroke="${staffLineColor}" stroke-width="1" />`;
+        }
+      }
+
+      // Right End Barline
+      svg += `<line x1="${endX}" y1="${sysTop}" x2="${endX}" y2="${sysBottom}" stroke="${staffLineColor}" stroke-width="1.2" />`;
+
+      // Clef Glyphs
+      svg += `<text x="20" y="${trebleBottomY - 2}" font-family="serif" font-size="47" fill="${inkColor}">𝄞</text>`;
+      if (isGrand) {
+        svg += `<text x="21" y="${ENGRAVE.bassTopY + 27}" font-family="serif" font-size="35" fill="${inkColor}">𝄢</text>`;
+      }
+
+      // Render Each Chord Stack Aligned Above Its Lyric Syllable
+      positioned.forEach((seg) => {
+        if (!seg.chord) return;
+        const voiced = parseAndVoiceChord(seg.chord, transposeSemitones, clefMode);
+        if (!voiced) return;
+
+        const chordId = chordRegistry.length;
+        chordRegistry.push(voiced);
+
+        const cx = seg.noteCenterX;
+
+        svg += `<g class="chord-tap-target" data-chord-id="${chordId}">`;
+
+        // Subtle tap highlight pill
+        svg += `
+          <rect
+            class="chord-highlight-pill"
+            x="${cx - 18}"
+            y="4"
+            width="36"
+            height="${svgHeight - 6}"
+            rx="8"
+            fill="${isDark ? 'rgba(129, 140, 248, 0.16)' : 'rgba(79, 70, 229, 0.10)'}"
+            opacity="0"
+          />
+        `;
+
+        // Small Chord Symbol Label above Treble Staff
+        svg += `
+          <text
+            x="${cx}"
+            y="18"
+            text-anchor="middle"
+            font-family="Newsreader, Georgia, serif"
+            font-weight="700"
+            font-size="14"
+            fill="${trebleAccent}"
+          >${voiced.displaySymbol}</text>
+        `;
+
+        // Treble Staff Notes
+        const trebleLaid = layoutStaffNotes(voiced.trebleNotes, 'treble');
+        svg += buildLedgerLines(trebleLaid, cx, 'treble', inkColor);
+
+        trebleLaid.forEach((n) => {
+          const nx = cx + (n.shiftRight ? 9.5 : 0);
+          svg += `
+            <g transform="translate(${nx}, ${n.y})">
+              <ellipse cx="0" cy="0" rx="5.8" ry="3.9" fill="${paperFill}" stroke="${inkColor}" stroke-width="1.85" transform="rotate(-14)" />
+              <ellipse cx="0" cy="0" rx="3.1" ry="1.9" fill="${paperFill}" transform="rotate(22)" />
+            </g>
+          `;
+          if (n.accidentalSymbol) {
+            const ax = cx - 11.5 - n.accCol * 8.5;
+            svg += `<text x="${ax}" y="${n.y + 4}" text-anchor="middle" font-family="serif" font-weight="700" font-size="13.5" fill="${inkColor}">${n.accidentalSymbol}</text>`;
+          }
+        });
+
+        // Bass Staff Notes (if Grand Staff)
+        if (isGrand && voiced.bassNotes.length > 0) {
+          const bassLaid = layoutStaffNotes(voiced.bassNotes, 'bass');
+          svg += buildLedgerLines(bassLaid, cx, 'bass', bassAccent);
+
+          bassLaid.forEach((n) => {
+            const nx = cx + (n.shiftRight ? 9.5 : 0);
+            svg += `
+              <g transform="translate(${nx}, ${n.y})">
+                <ellipse cx="0" cy="0" rx="5.8" ry="3.9" fill="${paperFill}" stroke="${bassAccent}" stroke-width="1.85" transform="rotate(-14)" />
+                <ellipse cx="0" cy="0" rx="3.1" ry="1.9" fill="${paperFill}" transform="rotate(22)" />
+              </g>
+            `;
+            if (n.accidentalSymbol) {
+              const ax = cx - 11.5 - n.accCol * 8.5;
+              svg += `<text x="${ax}" y="${n.y + 4}" text-anchor="middle" font-family="serif" font-weight="700" font-size="13.5" fill="${bassAccent}">${n.accidentalSymbol}</text>`;
+            }
+          });
+        }
+
+        svg += `</g>`;
+      });
+
+      svg += `</svg>`;
+
+      // Aligned Lyric Strip Directly Underneath the Bass Staff
+      let lyricHtml = `<div class="relative w-full h-7 mt-0.5 select-text">`;
+      positioned.forEach((seg) => {
+        const displayText = (seg.text || '').replace(/ /g, '&nbsp;');
+        if (!displayText) return;
+        const leftPct = (seg.leftX / svgWidth) * 100;
+        lyricHtml += `
+          <span
+            style="left: ${leftPct.toFixed(2)}%;"
+            class="absolute top-0 font-serif text-[16px] sm:text-[18px] leading-snug text-ink dark:text-slate-100 whitespace-nowrap"
+          >${displayText}</span>
+        `;
+      });
+      lyricHtml += `</div>`;
+
+      return `
+        <div class="w-full pt-1 pb-2 border-b border-stone-200/70 dark:border-slate-800/70 last:border-b-0">
+          ${svg}
+          ${lyricHtml}
+        </div>
+      `;
+    }
+
+
+    /**
+     * ============================================================================
+     * 7. GEMINI MULTIMODAL VISION PHOTO / SCREENSHOT SCANNER
+     * ============================================================================
+     */
+    async function scanImageWithGemini(file) {
+      const overlay = document.getElementById('scanningOverlay');
+      overlay.classList.remove('hidden');
+
+      try {
+        // Resize & compress image client-side so mobile camera photos upload fast
+        const base64Image = await resizeImageToBase64(file, 1400);
+
+        const prompt = `You are a church music transcription assistant. Examine this image of a worship song chord chart, printed bulletin, handwritten sheet, or screenshot.
+Extract the song title and transcribe ALL chords and lyrics accurately into clean ChordPro format where every chord is placed in square brackets directly before the syllable/word where it is played (for example: [G]Amazing [C]grace how [G]sweet the sound).
+Include section headers in brackets like [Verse 1], [Chorus], [Bridge].
+Respond ONLY with valid JSON matching this exact schema:
+{
+  "title": "Song Title",
+  "chordPro": "[Verse 1]\\n[G]Amazing [C]grace..."
+}`;
+
+        const payload = {
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: prompt },
+                {
+                  inlineData: {
+                    mimeType: 'image/jpeg',
+                    data: base64Image
+                  }
+                }
+              ]
+            }
+          ],
+          generationConfig: {
+            responseMimeType: 'application/json'
+          }
+        };
+
+        const apiKey = '';
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+        // Exponential backoff fetch
+        let response = null;
+        const delays = [1000, 2000, 4000];
+        for (let attempt = 0; attempt <= delays.length; attempt++) {
+          response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (response.ok || attempt === delays.length) break;
+          await new Promise((r) => setTimeout(r, delays[attempt]));
+        }
+
+        if (!response || !response.ok) {
+          throw new Error('Could not process image right now.');
+        }
+
+        const result = await response.json();
+        const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) {
+          throw new Error('No readable chords or lyrics detected in that photo.');
+        }
+
+        const parsed = JSON.parse(rawText);
+        if (!parsed.chordPro || !parsed.chordPro.trim()) {
+          throw new Error('No chords were found in the image. Try a clearer photo.');
+        }
+
+        const newSong = {
+          id: `scan-${Date.now()}`,
+          title: (parsed.title || 'Scanned Worship Song').trim(),
+          content: parsed.chordPro.trim()
+        };
+
+        appState.songs.unshift(newSong);
+        appState.activeSongId = newSong.id;
+        appState.transpose = 0;
+        saveSongsToStorage();
+        renderFullScore();
+        showBanner(`Scanned "${newSong.title}" into Grand Staff sheet music!`, 'success');
+      } catch (err) {
+        showBanner(err.message || 'Scan failed. Try cropping closer to the chords & lyrics.', 'error');
+      } finally {
+        overlay.classList.add('hidden');
+        document.getElementById('scanFileInput').value = '';
+      }
+    }
+
+    function resizeImageToBase64(file, maxDim) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            let { width, height } = img;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            resolve(dataUrl.split(',')[1]);
+          };
+          img.onerror = () => reject(new Error('Could not read image file.'));
+          img.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error('Could not open file.'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+
+    /**
+     * ============================================================================
+     * 8. APPLICATION STATE, STORAGE, AUTO-SCROLL & UI HANDLERS
+     * ============================================================================
+     */
+    const STORAGE_KEY = 'chapelkeys_songs_v1';
+
+    const appState = {
+      songs: [],
+      activeSongId: 'amazing-grace',
+      clefMode: 'grand', // 'grand' | 'treble'
+      transpose: 0,
+      isDark: false,
+      autoScrollActive: false,
+      scrollSpeed: 2, // 1 = Slow, 2 = Med, 3 = Fast
+      scrollRafId: null,
+      chordRegistry: []
+    };
+
+    function loadSongsFromStorage() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            appState.songs = parsed;
+            appState.activeSongId = parsed[0].id;
+            return;
+          }
+        }
+      } catch (e) {}
+      appState.songs = [...DEFAULT_SONGS];
+      appState.activeSongId = DEFAULT_SONGS[0].id;
+    }
+
+    function saveSongsToStorage() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appState.songs));
+      } catch (e) {}
+    }
+
+    function getActiveSong() {
+      return appState.songs.find((s) => s.id === appState.activeSongId) || appState.songs[0];
+    }
+
+    function showBanner(msg, type = 'success') {
+      const banner = document.getElementById('statusBanner');
+      const inner = document.getElementById('statusBannerInner');
+      const text = document.getElementById('statusBannerText');
+
+      text.textContent = msg;
+      if (type === 'error') {
+        inner.className = 'rounded-xl px-4 py-2.5 text-xs font-semibold flex items-center justify-between gap-2 shadow-sm border bg-rose-50 dark:bg-rose-950/80 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200';
+      } else {
+        inner.className = 'rounded-xl px-4 py-2.5 text-xs font-semibold flex items-center justify-between gap-2 shadow-sm border bg-emerald-50 dark:bg-emerald-950/80 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200';
+      }
+      banner.classList.remove('hidden');
+    }
+
+    function detectInitialKey(structuredLines, transpose) {
+      for (const item of structuredLines) {
+        if (item.type === 'musicLine') {
+          for (const seg of item.segments) {
+            if (seg.chord) {
+              const voiced = parseAndVoiceChord(seg.chord, transpose, 'grand');
+              if (voiced) {
+                return voiced.displaySymbol.replace(/\/.*$/, '');
+              }
+            }
+          }
+        }
+      }
+      return 'C';
+    }
+
+    function renderFullScore() {
+      const song = getActiveSong();
+      if (!song) return;
+
+      document.getElementById('headerSongTitle').textContent = song.title;
+      document.getElementById('scoreTitleDisplay').textContent = song.title;
+
+      const tBadge = document.getElementById('transposeBadge');
+      tBadge.textContent = appState.transpose > 0 ? `+${appState.transpose}` : `${appState.transpose}`;
+
+      const container = document.getElementById('verticalScoreContainer');
+      const availableWidth = container.clientWidth || Math.min(window.innerWidth - 36, 720);
+
+      const structured = parseSongLines(song.content);
+      const detectedKey = detectInitialKey(structured, appState.transpose);
+      document.getElementById('scoreKeyDisplay').textContent = `Starting Chord / Key: ${detectedKey}`;
+
+      appState.chordRegistry = [];
+      let html = '';
+
+      structured.forEach((item) => {
+        if (item.type === 'section') {
+          html += `
+            <div class="pt-3 pb-1">
+              <span class="inline-block px-2.5 py-0.5 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/90 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80">
+                ${item.label}
+              </span>
+            </div>
+          `;
+        } else if (item.type === 'musicLine') {
+          const wrappedRows = wrapSegmentsForWidth(item.segments, availableWidth);
+          wrappedRows.forEach((rowSegments) => {
+            html += renderSystemBlock(
+              rowSegments,
+              availableWidth,
+              appState.clefMode,
+              appState.transpose,
+              appState.isDark,
+              appState.chordRegistry
+            );
+          });
+        }
+      });
+
+      if (!html) {
+        html = `
+          <div class="py-10 text-center text-stone-500 dark:text-slate-400 text-sm">
+            Tap <strong>Scan</strong> or <strong>Paste</strong> above to add chords and lyrics.
+          </div>
+        `;
+      }
+
+      container.innerHTML = html;
+
+      // Attach tap-to-hear chord listeners
+      container.querySelectorAll('.chord-tap-target').forEach((el) => {
+        el.addEventListener('click', () => {
+          const idx = Number(el.getAttribute('data-chord-id'));
+          const voiced = appState.chordRegistry[idx];
+          if (voiced) {
+            pianoAudio.playChord(voiced.allNotes, 1.3);
+          }
+        });
+      });
+    }
+
+    function renderSetlistModal() {
+      const listEl = document.getElementById('setlistItemsContainer');
+      listEl.innerHTML = '';
+
+      appState.songs.forEach((song) => {
+        const isCurrent = song.id === appState.activeSongId;
+        const row = document.createElement('div');
+        row.className = `flex items-center justify-between gap-2 p-3 rounded-xl border transition ${
+          isCurrent
+            ? 'bg-indigo-50/90 dark:bg-indigo-950/60 border-indigo-400 dark:border-indigo-700'
+            : 'bg-ivory dark:bg-slate-800/80 border-stone-200 dark:border-slate-700'
+        }`;
+
+        const selectBtn = document.createElement('button');
+        selectBtn.type = 'button';
+        selectBtn.className = 'flex-1 text-left min-w-0';
+        selectBtn.innerHTML = `
+          <div class="font-serif font-bold text-base text-ink dark:text-white truncate">${song.title}</div>
+          <div class="text-[11px] text-stone-500 dark:text-slate-400 truncate">${song.content.split('\n')[0] || ''}</div>
+        `;
+        selectBtn.addEventListener('click', () => {
+          appState.activeSongId = song.id;
+          appState.transpose = 0;
+          stopAutoScroll();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          renderFullScore();
+          document.getElementById('setlistModal').classList.add('hidden');
+        });
+
+        row.appendChild(selectBtn);
+
+        if (appState.songs.length > 1) {
+          const delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.title = 'Remove song';
+          delBtn.className = 'p-2 text-xs text-stone-400 hover:text-rose-600 rounded-lg';
+          delBtn.textContent = '🗑';
+          delBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            appState.songs = appState.songs.filter((s) => s.id !== song.id);
+            if (appState.activeSongId === song.id) {
+              appState.activeSongId = appState.songs[0].id;
+            }
+            saveSongsToStorage();
+            renderSetlistModal();
+            renderFullScore();
+          });
+          row.appendChild(delBtn);
+        }
+
+        listEl.appendChild(row);
+      });
+    }
+
+    // Smooth Hands-Free Teleprompter Auto-Scroll
+    function startAutoScroll() {
+      if (appState.autoScrollActive) return;
+      appState.autoScrollActive = true;
+      document.getElementById('autoScrollIcon').textContent = '⏸';
+      document.getElementById('autoScrollLabel').textContent = 'Pause';
+
+      let lastTs = null;
+      const pxPerSecMap = { 1: 16, 2: 28, 3: 44 };
+
+      const step = (ts) => {
+        if (!appState.autoScrollActive) return;
+        if (lastTs !== null) {
+          const dt = (ts - lastTs) / 1000;
+          const speedPx = pxPerSecMap[appState.scrollSpeed] || 28;
+          window.scrollBy(0, speedPx * dt);
+
+          if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 4) {
+            stopAutoScroll();
+            return;
+          }
+        }
+        lastTs = ts;
+        appState.scrollRafId = requestAnimationFrame(step);
+      };
+
+      appState.scrollRafId = requestAnimationFrame(step);
+    }
+
+    function stopAutoScroll() {
+      appState.autoScrollActive = false;
+      if (appState.scrollRafId) {
+        cancelAnimationFrame(appState.scrollRafId);
+        appState.scrollRafId = null;
+      }
+      document.getElementById('autoScrollIcon').textContent = '▶';
+      document.getElementById('autoScrollLabel').textContent = 'Auto-Scroll';
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadSongsFromStorage();
+      renderFullScore();
+
+      // Re-flow lines cleanly on phone rotation or viewport resize
+      let resizeTimeout;
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => renderFullScore(), 120);
+      });
+
+      // Scan Photo / Screenshot
+      const fileInput = document.getElementById('scanFileInput');
+      document.getElementById('triggerScanBtn').addEventListener('click', () => {
+        stopAutoScroll();
+        fileInput.click();
+      });
+
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+          scanImageWithGemini(file);
+        }
+      });
+
+      // Setlist Modal
+      document.getElementById('openSetlistBtn').addEventListener('click', () => {
+        stopAutoScroll();
+        renderSetlistModal();
+        document.getElementById('setlistModal').classList.remove('hidden');
+      });
+      document.getElementById('closeSetlistBtn').addEventListener('click', () => {
+        document.getElementById('setlistModal').classList.add('hidden');
+      });
+      document.getElementById('setlistScanBtn').addEventListener('click', () => {
+        document.getElementById('setlistModal').classList.add('hidden');
+        fileInput.click();
+      });
+      document.getElementById('setlistNewPasteBtn').addEventListener('click', () => {
+        document.getElementById('setlistModal').classList.add('hidden');
+        document.getElementById('songTitleInput').value = '';
+        document.getElementById('songBodyInput').value = '';
+        document.getElementById('pasteModal').classList.remove('hidden');
+      });
+
+      // Quick Paste / Edit Modal
+      document.getElementById('openPasteModalBtn').addEventListener('click', () => {
+        stopAutoScroll();
+        const current = getActiveSong();
+        document.getElementById('songTitleInput').value = current ? current.title : '';
+        document.getElementById('songBodyInput').value = current ? current.content : '';
+        document.getElementById('pasteModal').classList.remove('hidden');
+      });
+
+      const closePaste = () => document.getElementById('pasteModal').classList.add('hidden');
+      document.getElementById('closePasteModalBtn').addEventListener('click', closePaste);
+      document.getElementById('cancelPasteBtn').addEventListener('click', closePaste);
+
+      document.getElementById('saveSongBtn').addEventListener('click', () => {
+        const title = document.getElementById('songTitleInput').value.trim() || 'Untitled Worship Song';
+        const rawBody = document.getElementById('songBodyInput').value.trim();
+        if (!rawBody) {
+          showBanner('Please paste or type some chords and lyrics first.', 'error');
+          return;
+        }
+
+        const normalizedBody = normalizeToChordPro(rawBody);
+        const existingIdx = appState.songs.findIndex(
+          (s) => s.title.toLowerCase() === title.toLowerCase()
+        );
+
+        if (existingIdx >= 0) {
+          appState.songs[existingIdx].content = normalizedBody;
+          appState.activeSongId = appState.songs[existingIdx].id;
+        } else {
+          const newEntry = {
+            id: `song-${Date.now()}`,
+            title,
+            content: normalizedBody
+          };
+          appState.songs.unshift(newEntry);
+          appState.activeSongId = newEntry.id;
+        }
+
+        appState.transpose = 0;
+        saveSongsToStorage();
+        closePaste();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        renderFullScore();
+        showBanner(`Engraved "${title}" on the Grand Staff!`, 'success');
+      });
+
+      // Grand Staff vs Treble Only Toggle
+      document.querySelectorAll('.clef-toggle-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.clef-toggle-btn').forEach((b) => {
+            b.className = 'clef-toggle-btn px-2.5 py-1 rounded-md text-[11px] font-bold text-stone-600 dark:text-slate-400 transition';
+          });
+          btn.className = 'clef-toggle-btn px-2.5 py-1 rounded-md text-[11px] font-bold bg-paper dark:bg-slate-700 text-ink dark:text-white shadow-sm transition';
+          appState.clefMode = btn.dataset.clef;
+          renderFullScore();
+        });
+      });
+
+      // Chapel Stage Dark / Light Mode Toggle
+      document.getElementById('toggleThemeBtn').addEventListener('click', () => {
+        appState.isDark = !appState.isDark;
+        document.documentElement.classList.toggle('dark', appState.isDark);
+        document.getElementById('themeIcon').textContent = appState.isDark ? '☀️' : '🌙';
+        renderFullScore();
+      });
+
+      // Auto-Scroll Play/Pause & Speed
+      document.getElementById('autoScrollBtn').addEventListener('click', () => {
+        if (appState.autoScrollActive) {
+          stopAutoScroll();
+        } else {
+          startAutoScroll();
+        }
+      });
+
+      document.querySelectorAll('.speed-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.speed-btn').forEach((b) => {
+            b.className = 'speed-btn px-2 py-1.5 rounded-lg text-[11px] font-bold text-stone-600 dark:text-slate-400';
+          });
+          btn.className = 'speed-btn px-2 py-1.5 rounded-lg text-[11px] font-bold bg-paper dark:bg-slate-700 text-ink dark:text-white shadow-sm';
+          appState.scrollSpeed = Number(btn.dataset.speed);
+        });
+      });
+
+      // Quick Transpose (- / + semitones)
+      document.getElementById('transposeDownBtn').addEventListener('click', () => {
+        appState.transpose = appState.transpose <= -11 ? 0 : appState.transpose - 1;
+        renderFullScore();
+      });
+
+      document.getElementById('transposeUpBtn').addEventListener('click', () => {
+        appState.transpose = appState.transpose >= 11 ? 0 : appState.transpose + 1;
+        renderFullScore();
+      });
+
+      // Install Help Modal & Banner Dismiss
+      document.getElementById('openInstallHelpBtn').addEventListener('click', () => {
+        document.getElementById('installHelpModal').classList.remove('hidden');
+      });
+      document.getElementById('closeInstallHelpBtn').addEventListener('click', () => {
+        document.getElementById('installHelpModal').classList.add('hidden');
+      });
+      document.getElementById('gotItInstallBtn').addEventListener('click', () => {
+        document.getElementById('installHelpModal').classList.add('hidden');
+      });
+      document.getElementById('dismissBannerBtn').addEventListener('click', () => {
+        document.getElementById('statusBanner').classList.add('hidden');
+      });
+    });
+  </script>
+</body>
+</html>
