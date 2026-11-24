@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="ChapelKeys" />
@@ -39,22 +39,44 @@
     /* Enforce strictly vertical scrolling on all mobile and desktop viewports */
     html, body {
       overflow-x: hidden;
-      max-width: 100vw;
+      overflow-x: clip;
+      max-width: 100%;
       width: 100%;
       margin: 0;
       padding: 0;
       -webkit-tap-highlight-color: transparent;
+      -webkit-text-size-adjust: 100%;
       scroll-behavior: smooth;
     }
 
     body {
       background-color: #F4F1E8;
       color: #1E293B;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
     }
 
     html.dark body {
       background-color: #0B0F19;
       color: #F1F5F9;
+    }
+
+    .safe-header {
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-left: env(safe-area-inset-left, 0px);
+      padding-right: env(safe-area-inset-right, 0px);
+    }
+
+    .safe-main {
+      padding-left: max(0.5rem, env(safe-area-inset-left, 0px));
+      padding-right: max(0.5rem, env(safe-area-inset-right, 0px));
+    }
+
+    .safe-bottom-nav {
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      padding-left: env(safe-area-inset-left, 0px);
+      padding-right: env(safe-area-inset-right, 0px);
     }
 
     .score-sheet {
@@ -85,7 +107,7 @@
     }
   </style>
 </head>
-<body class="min-h-screen flex flex-col font-sans antialiased pb-28">
+<body class="flex flex-col font-sans antialiased">
 
   <!-- Hidden file input for Camera / Screenshot Scan -->
   <input
@@ -96,8 +118,8 @@
   />
 
   <!-- Compact Sticky Top Bar -->
-  <header class="sticky top-0 z-30 bg-paper/95 dark:bg-stage/95 backdrop-blur-md border-b border-stone-300/80 dark:border-slate-800">
-    <div class="max-w-3xl mx-auto px-3 sm:px-5 py-2.5 flex items-center justify-between gap-2">
+  <header class="safe-header sticky top-0 z-30 bg-paper/95 dark:bg-stage/95 backdrop-blur-md border-b border-stone-300/80 dark:border-slate-800">
+    <div class="w-full px-3 sm:px-5 py-2.5 flex items-center justify-between gap-2">
       <!-- Brand + Setlist Drawer Trigger -->
       <button
         id="openSetlistBtn"
@@ -163,7 +185,7 @@
     </div>
 
     <!-- Secondary Slim Control Strip (Clef Mode + Install PWA) -->
-    <div class="max-w-3xl mx-auto px-3 sm:px-5 py-1.5 bg-ivory/80 dark:bg-slate-900/80 border-t border-stone-200/80 dark:border-slate-800 flex items-center justify-between gap-2 text-xs">
+    <div class="w-full px-3 sm:px-5 py-1.5 bg-ivory/80 dark:bg-slate-900/80 border-t border-stone-200/80 dark:border-slate-800 flex items-center justify-between gap-2 text-xs">
       <div class="inline-flex rounded-lg bg-stone-200/80 dark:bg-slate-800 p-0.5">
         <button
           type="button"
@@ -184,7 +206,7 @@
       <button
         id="openInstallHelpBtn"
         type="button"
-        class="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 dark:text-indigo-400 hover:underline px-2 py-1 rounded-lg"
+        class="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 dark:text-indigo-400 hover:underline px-2 py-1 rounded-lg shrink-0"
       >
         <span>📲 Add to Phone</span>
       </button>
@@ -192,7 +214,7 @@
   </header>
 
   <!-- Status Toast / Notification Banner -->
-  <div id="statusBanner" class="hidden max-w-3xl w-full mx-auto px-3 sm:px-5 pt-3">
+  <div id="statusBanner" class="hidden w-full px-2 sm:px-5 pt-3">
     <div id="statusBannerInner" class="rounded-xl px-4 py-2.5 text-xs font-semibold flex items-center justify-between gap-2 shadow-sm border">
       <span id="statusBannerText"></span>
       <button id="dismissBannerBtn" type="button" class="opacity-70 hover:opacity-100 font-bold">✕</button>
@@ -216,8 +238,8 @@
   </div>
 
   <!-- Main Vertical Sheet Music & Lyrics Score Container -->
-  <main class="flex-1 max-w-3xl w-full mx-auto px-2.5 sm:px-5 pt-4 pb-10">
-    <article class="score-sheet rounded-2xl border border-stone-300/90 dark:border-slate-800 px-3 sm:px-6 py-5 sm:py-7">
+  <main class="safe-main flex-1 w-full pt-3 pb-6">
+    <article class="score-sheet w-full rounded-2xl border border-stone-300/90 dark:border-slate-800 px-2.5 sm:px-6 py-4 sm:py-6">
       <!-- Song Title & Key Header on the Printed Score -->
       <div class="text-center pb-4 mb-5 border-b border-stone-200 dark:border-slate-800">
         <h1 id="scoreTitleDisplay" class="font-serif text-2xl sm:text-3xl font-bold text-ink dark:text-slate-100 tracking-tight">
@@ -240,23 +262,23 @@
   <!-- Floating Bottom Worship Bar (Auto-Scroll + Transpose) -->
   <nav
     aria-label="Worship Stage Controls"
-    class="fixed bottom-0 inset-x-0 z-30 bg-paper/95 dark:bg-stage/95 backdrop-blur-md border-t border-stone-300 dark:border-slate-800 shadow-[0_-6px_24px_rgba(0,0,0,0.08)]"
+    class="safe-bottom-nav fixed bottom-0 inset-x-0 z-30 bg-paper/95 dark:bg-stage/95 backdrop-blur-md border-t border-stone-300 dark:border-slate-800 shadow-[0_-6px_24px_rgba(0,0,0,0.08)]"
   >
-    <div class="max-w-3xl mx-auto px-3 sm:px-5 py-2.5 flex items-center justify-between gap-2">
+    <div class="w-full px-2.5 sm:px-5 py-2 flex items-center justify-between gap-1.5 sm:gap-3">
       <!-- Auto-Scroll Controls -->
-      <div class="flex items-center gap-1.5 sm:gap-2">
+      <div class="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0">
         <button
           id="autoScrollBtn"
           type="button"
-          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-ink dark:bg-indigo-600 text-paper dark:text-white shadow-sm active:scale-95 transition"
+          class="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-ink dark:bg-indigo-600 text-paper dark:text-white shadow-sm active:scale-95 transition shrink-0"
         >
           <span id="autoScrollIcon">▶</span>
           <span id="autoScrollLabel">Auto-Scroll</span>
         </button>
 
         <!-- Speed Slider -->
-        <div class="flex items-center gap-1.5 rounded-xl bg-ivory dark:bg-slate-800 px-2.5 py-1.5 border border-stone-300/80 dark:border-slate-700">
-          <label for="scrollSpeedSlider" class="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-slate-400 hidden sm:inline">Speed</label>
+        <div class="flex items-center gap-1.5 rounded-xl bg-ivory dark:bg-slate-800 px-2 sm:px-2.5 py-1.5 border border-stone-300/80 dark:border-slate-700 flex-1 min-w-0 max-w-xs">
+          <label for="scrollSpeedSlider" class="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-slate-400 hidden sm:inline shrink-0">Speed</label>
           <input
             id="scrollSpeedSlider"
             type="range"
@@ -265,23 +287,24 @@
             step="2"
             value="28"
             aria-label="Auto-scroll speed"
-            class="w-20 sm:w-28 h-1.5 accent-indigo-600 cursor-pointer"
+            style="touch-action: pan-x;"
+            class="w-full min-w-[44px] h-1.5 accent-indigo-600 cursor-pointer"
           />
-          <span id="scrollSpeedValue" class="text-[11px] font-bold text-ink dark:text-slate-200 min-w-[24px] text-right">28</span>
+          <span id="scrollSpeedValue" class="text-[11px] font-bold text-ink dark:text-slate-200 min-w-[22px] text-right shrink-0">28</span>
         </div>
       </div>
 
       <!-- Quick Transpose Controls (- / + semitones) -->
-      <div class="flex items-center gap-1.5 bg-ivory dark:bg-slate-800 px-2 py-1 rounded-xl border border-stone-300/80 dark:border-slate-700">
+      <div class="flex items-center gap-1 sm:gap-1.5 bg-ivory dark:bg-slate-800 px-1.5 sm:px-2 py-1 rounded-xl border border-stone-300/80 dark:border-slate-700 shrink-0">
         <button
           id="transposeDownBtn"
           type="button"
           aria-label="Transpose down half step"
-          class="w-8 h-8 rounded-lg bg-paper dark:bg-slate-700 hover:bg-stone-200 text-ink dark:text-white font-bold text-base flex items-center justify-center shadow-sm active:scale-95 transition"
+          class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-paper dark:bg-slate-700 hover:bg-stone-200 text-ink dark:text-white font-bold text-base flex items-center justify-center shadow-sm active:scale-95 transition"
         >
           −
         </button>
-        <div class="px-1.5 text-center min-w-[54px]">
+        <div class="px-1 sm:px-1.5 text-center min-w-[44px] sm:min-w-[54px]">
           <span class="block text-[9px] font-bold uppercase tracking-wider text-stone-400">Key Shift</span>
           <span id="transposeBadge" class="text-xs font-bold text-indigo-700 dark:text-indigo-400">0</span>
         </div>
@@ -289,7 +312,7 @@
           id="transposeUpBtn"
           type="button"
           aria-label="Transpose up half step"
-          class="w-8 h-8 rounded-lg bg-paper dark:bg-slate-700 hover:bg-stone-200 text-ink dark:text-white font-bold text-base flex items-center justify-center shadow-sm active:scale-95 transition"
+          class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-paper dark:bg-slate-700 hover:bg-stone-200 text-ink dark:text-white font-bold text-base flex items-center justify-center shadow-sm active:scale-95 transition"
         >
           +
         </button>
@@ -302,7 +325,7 @@
     id="setlistModal"
     class="hidden fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center"
   >
-    <div class="bg-paper dark:bg-stageCard w-full max-w-lg rounded-t-3xl sm:rounded-2xl border border-stone-300 dark:border-slate-700 p-5 max-h-[85vh] flex flex-col shadow-2xl">
+    <div class="bg-paper dark:bg-stageCard w-full max-w-lg rounded-t-3xl sm:rounded-2xl border border-stone-300 dark:border-slate-700 p-5 max-h-[85vh] flex flex-col shadow-2xl" style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));">
       <div class="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-slate-800">
         <div>
           <h2 class="font-bold text-lg text-ink dark:text-white">Chapel Setlist</h2>
@@ -339,7 +362,7 @@
     id="pasteModal"
     class="hidden fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center"
   >
-    <div class="bg-paper dark:bg-stageCard w-full max-w-lg rounded-t-3xl sm:rounded-2xl border border-stone-300 dark:border-slate-700 p-5 max-h-[90vh] flex flex-col shadow-2xl space-y-3">
+    <div class="bg-paper dark:bg-stageCard w-full max-w-lg rounded-t-3xl sm:rounded-2xl border border-stone-300 dark:border-slate-700 p-5 max-h-[90vh] flex flex-col shadow-2xl space-y-3" style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));">
       <div class="flex items-center justify-between pb-2 border-b border-stone-200 dark:border-slate-800">
         <div>
           <h2 class="font-bold text-lg text-ink dark:text-white">Quick Paste or Edit Song</h2>
@@ -399,7 +422,7 @@
     id="installHelpModal"
     class="hidden fixed inset-0 z-50 bg-slate-950/65 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4"
   >
-    <div class="bg-paper dark:bg-stageCard w-full max-w-md rounded-t-3xl sm:rounded-2xl border border-stone-300 dark:border-slate-700 p-5 space-y-4 shadow-2xl">
+    <div class="bg-paper dark:bg-stageCard w-full max-w-md rounded-t-3xl sm:rounded-2xl border border-stone-300 dark:border-slate-700 p-5 space-y-4 shadow-2xl" style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));">
       <div class="flex items-center justify-between pb-2 border-b border-stone-200 dark:border-slate-800">
         <div class="flex items-center gap-2.5">
           <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-serif text-xl font-bold">𝄞</div>
@@ -1223,7 +1246,7 @@ Praise the [C]Lord, praise the [G]Lord, O my [C]soul`
       svg += `</svg>`;
 
       // Aligned Lyric Strip Directly Underneath the Bass Staff
-      let lyricHtml = `<div class="relative w-full h-7 mt-0.5 select-text">`;
+      let lyricHtml = `<div class="relative w-full h-7 mt-0.5 select-text overflow-hidden">`;
       positioned.forEach((seg) => {
         const displayText = (seg.text || '').replace(/ /g, '&nbsp;');
         if (!displayText) return;
@@ -1458,7 +1481,7 @@ Respond ONLY with valid JSON matching this exact schema:
       tBadge.textContent = appState.transpose > 0 ? `+${appState.transpose}` : `${appState.transpose}`;
 
       const container = document.getElementById('verticalScoreContainer');
-      const availableWidth = container.clientWidth || Math.min(window.innerWidth - 36, 720);
+      const availableWidth = container.clientWidth || Math.max(280, window.innerWidth - 36);
 
       const structured = parseSongLines(song.content);
       const detectedKey = detectInitialKey(structured, appState.transpose);
@@ -1624,10 +1647,30 @@ Respond ONLY with valid JSON matching this exact schema:
 
       // Re-flow lines cleanly on phone rotation or viewport resize
       let resizeTimeout;
-      window.addEventListener('resize', () => {
+      let lastRenderedWidth = document.getElementById('verticalScoreContainer').clientWidth;
+      const scheduleReflow = () => {
         clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => renderFullScore(), 120);
+        resizeTimeout = setTimeout(() => {
+          const currentWidth = document.getElementById('verticalScoreContainer').clientWidth;
+          if (currentWidth && currentWidth !== lastRenderedWidth) {
+            lastRenderedWidth = currentWidth;
+            renderFullScore();
+          }
+        }, 100);
+      };
+
+      window.addEventListener('resize', scheduleReflow);
+      window.addEventListener('orientationchange', () => {
+        setTimeout(() => {
+          lastRenderedWidth = 0;
+          scheduleReflow();
+        }, 180);
       });
+
+      if (typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(scheduleReflow);
+        ro.observe(document.getElementById('verticalScoreContainer'));
+      }
 
       // Scan Photo / Screenshot
       const fileInput = document.getElementById('scanFileInput');
