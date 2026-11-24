@@ -254,11 +254,20 @@
           <span id="autoScrollLabel">Auto-Scroll</span>
         </button>
 
-        <!-- Speed Selector Pills -->
-        <div class="inline-flex rounded-xl bg-ivory dark:bg-slate-800 p-0.5 border border-stone-300/80 dark:border-slate-700">
-          <button type="button" data-speed="1" class="speed-btn px-2 py-1.5 rounded-lg text-[11px] font-bold text-stone-600 dark:text-slate-400">Slow</button>
-          <button type="button" data-speed="2" class="speed-btn px-2 py-1.5 rounded-lg text-[11px] font-bold bg-paper dark:bg-slate-700 text-ink dark:text-white shadow-sm">Med</button>
-          <button type="button" data-speed="3" class="speed-btn px-2 py-1.5 rounded-lg text-[11px] font-bold text-stone-600 dark:text-slate-400">Fast</button>
+        <!-- Speed Slider -->
+        <div class="flex items-center gap-1.5 rounded-xl bg-ivory dark:bg-slate-800 px-2.5 py-1.5 border border-stone-300/80 dark:border-slate-700">
+          <label for="scrollSpeedSlider" class="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-slate-400 hidden sm:inline">Speed</label>
+          <input
+            id="scrollSpeedSlider"
+            type="range"
+            min="8"
+            max="100"
+            step="2"
+            value="28"
+            aria-label="Auto-scroll speed"
+            class="w-20 sm:w-28 h-1.5 accent-indigo-600 cursor-pointer"
+          />
+          <span id="scrollSpeedValue" class="text-[11px] font-bold text-ink dark:text-slate-200 min-w-[24px] text-right">28</span>
         </div>
       </div>
 
@@ -1377,7 +1386,7 @@ Respond ONLY with valid JSON matching this exact schema:
       transpose: 0,
       isDark: false,
       autoScrollActive: false,
-      scrollSpeed: 2, // 1 = Slow, 2 = Med, 3 = Fast
+      scrollSpeed: 28, // pixels per second
       scrollRafId: null,
       chordRegistry: []
     };
@@ -1565,17 +1574,27 @@ Respond ONLY with valid JSON matching this exact schema:
       document.getElementById('autoScrollIcon').textContent = '⏸';
       document.getElementById('autoScrollLabel').textContent = 'Pause';
 
+      document.documentElement.style.scrollBehavior = 'auto';
+      document.body.style.scrollBehavior = 'auto';
+
       let lastTs = null;
-      const pxPerSecMap = { 1: 16, 2: 28, 3: 44 };
+      let carry = 0;
 
       const step = (ts) => {
         if (!appState.autoScrollActive) return;
         if (lastTs !== null) {
-          const dt = (ts - lastTs) / 1000;
-          const speedPx = pxPerSecMap[appState.scrollSpeed] || 28;
-          window.scrollBy(0, speedPx * dt);
+          const dt = Math.min((ts - lastTs) / 1000, 0.1);
+          carry += appState.scrollSpeed * dt;
+          const wholePx = Math.floor(carry);
 
-          if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 4) {
+          const scroller = document.scrollingElement || document.documentElement;
+          if (wholePx >= 1) {
+            carry -= wholePx;
+            scroller.scrollTop += wholePx;
+          }
+
+          const maxScroll = scroller.scrollHeight - window.innerHeight;
+          if (maxScroll <= 0 || scroller.scrollTop >= maxScroll - 2) {
             stopAutoScroll();
             return;
           }
@@ -1593,6 +1612,8 @@ Respond ONLY with valid JSON matching this exact schema:
         cancelAnimationFrame(appState.scrollRafId);
         appState.scrollRafId = null;
       }
+      document.documentElement.style.scrollBehavior = '';
+      document.body.style.scrollBehavior = '';
       document.getElementById('autoScrollIcon').textContent = '▶';
       document.getElementById('autoScrollLabel').textContent = 'Auto-Scroll';
     }
@@ -1718,14 +1739,11 @@ Respond ONLY with valid JSON matching this exact schema:
         }
       });
 
-      document.querySelectorAll('.speed-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          document.querySelectorAll('.speed-btn').forEach((b) => {
-            b.className = 'speed-btn px-2 py-1.5 rounded-lg text-[11px] font-bold text-stone-600 dark:text-slate-400';
-          });
-          btn.className = 'speed-btn px-2 py-1.5 rounded-lg text-[11px] font-bold bg-paper dark:bg-slate-700 text-ink dark:text-white shadow-sm';
-          appState.scrollSpeed = Number(btn.dataset.speed);
-        });
+      const scrollSpeedSlider = document.getElementById('scrollSpeedSlider');
+      const scrollSpeedValue = document.getElementById('scrollSpeedValue');
+      scrollSpeedSlider.addEventListener('input', (e) => {
+        appState.scrollSpeed = Number(e.target.value);
+        scrollSpeedValue.textContent = e.target.value;
       });
 
       // Quick Transpose (- / + semitones)
