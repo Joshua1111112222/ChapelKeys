@@ -781,57 +781,144 @@ Praise the [C]Lord, praise the [G]Lord, O my [C]soul`
 
     /**
      * ============================================================================
-     * 4. SMART CHORDPRO & CHORDS-ABOVE-LYRICS PARSER
+     * 4. SMART CHORDPRO, CHORDS-ABOVE-LYRICS PARSER & IPHONE PASTE AUTO-FORMATTER
      * ============================================================================
      */
     const CHORD_TOKEN_REGEX = /^[A-Ga-g](#|b|♯|♭)?(maj7|min7|m7b5|dim7|maj|min|m7|m6|m|7|dim|aug|\+|sus2|sus4|sus|add9|2|6|9|M7|-7|-)?(\/[A-Ga-g](#|b|♯|♭)?)?$/;
+    const SECTION_HEADER_REGEX = /^(verse|chorus|pre-?chorus|bridge|intro|outro|ending|tag|interlude|instrumental|refrain|coda|turnaround|vamp)(\s*\d*[a-z]?)?\s*:?$/i;
+
+    function isSectionHeaderLine(line) {
+      const trimmed = line.trim();
+      if (!trimmed) return false;
+      const bracketed = trimmed.match(/^\[([^\]]+)\]$/);
+      if (bracketed) {
+        return !CHORD_TOKEN_REGEX.test(bracketed[1].trim());
+      }
+      return SECTION_HEADER_REGEX.test(trimmed);
+    }
 
     function isChordLine(line) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.includes('[')) return false;
-      const tokens = trimmed.split(/\s+/).filter((t) => t !== '|');
+      const tokens = trimmed.split(/\s+/).filter((t) => t !== '|' && t !== '/');
       if (tokens.length === 0) return false;
       const validCount = tokens.filter((t) => CHORD_TOKEN_REGEX.test(t)).length;
       return validCount > 0 && validCount / tokens.length >= 0.75;
     }
 
+    function isBracketedChordOnlyLine(line) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.includes('[')) return false;
+      let hasValidChord = false;
+      const stripped = trimmed.replace(/\[([^\]]+)\]/g, (full, inner) => {
+        if (CHORD_TOKEN_REGEX.test(inner.trim())) {
+          hasValidChord = true;
+          return '';
+        }
+        return full;
+      });
+      return hasValidChord && stripped.replace(/[\s|/-]+/g, '') === '';
+    }
+
+    function extractChordMatchesFromLine(line, isBracketed) {
+      const chordMatches = [];
+      if (isBracketed) {
+        const regex = /\[([^\]]+)\]/g;
+        let m;
+        while ((m = regex.exec(line)) !== null) {
+          const token = m[1].trim();
+          if (CHORD_TOKEN_REGEX.test(token)) {
+            chordMatches.push({ chord: token, col: m.index });
+          }
+        }
+      } else {
+        const regex = /\S+/g;
+        let m;
+        while ((m = regex.exec(line)) !== null) {
+          if (CHORD_TOKEN_REGEX.test(m[0])) {
+            chordMatches.push({ chord: m[0], col: m.index });
+          }
+        }
+      }
+      return chordMatches;
+    }
+
     /**
-     * Converts raw pasted text (either ChordPro `[G]Amazing [C]grace` OR
-     * two-line `G       C\nAmazing grace`) into normalized ChordPro lines.
+     * Converts raw pasted text (either ChordPro `[G]Amazing [C]grace`,
+     * two-line `G       C\nAmazing grace`, or fragmented iPhone copy-paste)
+     * into clean normalized ChordPro lines.
      */
     function normalizeToChordPro(rawText) {
-      const rawLines = rawText.replace(/\r\n/g, '\n').split('\n');
+      const cleanedText = rawText
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .replace(/\u00A0/g, ' ')
+        .replace(/\t/g, '    ');
+
+      const rawLines = cleanedText.split('\n');
       const output = [];
 
       for (let i = 0; i < rawLines.length; i++) {
         const line = rawLines[i];
-        const nextLine = rawLines[i + 1];
+        const trimmed = line.trim();
 
-        if (isChordLine(line)) {
-          // Extract chord tokens and their character column indices
-          const chordMatches = [];
-          const regex = /\S+/g;
-          let m;
-          while ((m = regex.exec(line)) !== null) {
-            if (CHORD_TOKEN_REGEX.test(m[0])) {
-              chordMatches.push({ chord: m[0], col: m.index });
-            }
+        if (!trimmed) {
+          output.push('');
+          continue;
+        }
+
+        // Normalize unbracketed section headers (e.g. "Verse 1:", "Chorus")
+        if (isSectionHeaderLine(trimmed)) {
+          const cleanLabel = trimmed.replace(/^\[|\]$/g, '').replace(/:$/, '').trim();
+          output.push(`[${cleanLabel}]`);
+          continue;
+        }
+
+        const plainChord = isChordLine(line);
+        const bracketedChord = !plainChord && isBracketedChordOnlyLine(line);
+
+        if (plainChord || bracketedChord) {
+          const chordMatches = extractChordMatchesFromLine(line, bracketedChord);
+
+          // Look ahead for the paired lyric line (also bridging a single accidental blank line from iPhone paste)
+          let lyricIdx = i + 1;
+          if (
+            lyricIdx < rawLines.length &&
+            rawLines[lyricIdx].trim() === '' &&
+            lyricIdx + 1 < rawLines.length &&
+            rawLines[lyricIdx + 1].trim() !== '' &&
+            !isChordLine(rawLines[lyricIdx + 1]) &&
+            !isBracketedChordOnlyLine(rawLines[lyricIdx + 1]) &&
+            !isSectionHeaderLine(rawLines[lyricIdx + 1])
+          ) {
+            lyricIdx = i + 2;
           }
 
-          if (nextLine !== undefined && nextLine.trim() !== '' && !isChordLine(nextLine) && !nextLine.trim().startsWith('[')) {
-            // Merge chords into the lyric line at matching character columns
+          const nextLine = rawLines[lyricIdx];
+          if (
+            nextLine !== undefined &&
+            nextLine.trim() !== '' &&
+            !isChordLine(nextLine) &&
+            !isBracketedChordOnlyLine(nextLine) &&
+            !isSectionHeaderLine(nextLine) &&
+            !nextLine.includes('[')
+          ) {
             let merged = nextLine;
-            // Insert from right to left so indices stay valid
-            for (let c = chordMatches.length - 1; c >= 0; c--) {
-              const { chord, col } = chordMatches[c];
-              if (col >= merged.length) {
-                merged = merged.padEnd(col, ' ') + `[${chord}]`;
-              } else {
-                merged = merged.slice(0, col) + `[${chord}]` + merged.slice(col);
+            if (chordMatches.length === 1 && chordMatches[0].col === 0) {
+              merged = `[${chordMatches[0].chord}]${merged.trimStart()}`;
+            } else {
+              // Insert from right to left so character indices stay aligned
+              for (let c = chordMatches.length - 1; c >= 0; c--) {
+                const { chord, col } = chordMatches[c];
+                if (col >= merged.length) {
+                  merged = merged.padEnd(col, ' ') + `[${chord}]`;
+                } else {
+                  merged = merged.slice(0, col) + `[${chord}]` + merged.slice(col);
+                }
               }
             }
             output.push(merged);
-            i++; // Skip consumed lyric line
+            i = lyricIdx; // Skip consumed lyric line
           } else {
             // Standalone instrumental chord line
             output.push(chordMatches.map((cm) => `[${cm.chord}]`).join('   '));
@@ -1004,6 +1091,101 @@ Praise the [C]Lord, praise the [G]Lord, O my [C]soul`
       return _lyricMeasureCtx.measureText(text).width;
     }
 
+    function measureSegmentsWidth(segments, fontSize) {
+      return segments.reduce((sum, seg, idx) => {
+        const t = idx === segments.length - 1 ? (seg.text || '').trimEnd() : (seg.text || '');
+        return sum + Math.max(measureLyricWidth(t, fontSize) + 4, seg.chord ? 44 : 10);
+      }, 0);
+    }
+
+    /**
+     * Auto-formats parsed music lines for the current iPhone/screen width so fragmented
+     * or single-chord-per-line pastes pack cleanly to fill the Grand Staff.
+     */
+    function autoFormatForViewport(structured, availableWidth) {
+      const usableWidth = Math.max(200, availableWidth - ENGRAVE.clefMargin - 4);
+      const minColWidth = availableWidth < 640 ? 58 : 66;
+      const maxChordsPerRow = Math.max(2, Math.floor(usableWidth / minColWidth));
+      const baseFontSize = availableWidth < 640 ? 16 : 18;
+      const packTargetWidth = availableWidth < 640
+        ? usableWidth * 1.06
+        : Math.min(usableWidth * 1.04, 640);
+
+      const result = [];
+      let pendingSegments = null;
+
+      const flushPending = () => {
+        if (pendingSegments && pendingSegments.length > 0) {
+          result.push({ type: 'musicLine', segments: pendingSegments });
+        }
+        pendingSegments = null;
+      };
+
+      const countChords = (segs) => segs.filter((s) => s.chord).length;
+      const isInstrumentalOnly = (segs) => segs.every((s) => !(s.text || '').trim());
+
+      const mergeSegmentLists = (base, incoming) => {
+        const merged = base.map((s) => ({ ...s }));
+        const next = incoming.map((s) => ({ ...s }));
+        if (merged.length === 0) return next;
+        if (next.length === 0) return merged;
+
+        const lastBase = merged[merged.length - 1];
+        const firstNext = next[0];
+
+        if (lastBase.text && !/[\s-]$/.test(lastBase.text)) {
+          lastBase.text += ' ';
+        }
+
+        if (!firstNext.chord) {
+          lastBase.text = (lastBase.text || '') + (firstNext.text || '').trimStart();
+          return merged.concat(next.slice(1));
+        }
+
+        return merged.concat(next);
+      };
+
+      structured.forEach((item) => {
+        if (item.type !== 'musicLine') {
+          flushPending();
+          result.push(item);
+          return;
+        }
+
+        const incoming = item.segments;
+        if (!pendingSegments) {
+          pendingSegments = incoming.map((s) => ({ ...s }));
+          return;
+        }
+
+        const pendingChords = countChords(pendingSegments);
+        const incomingChords = countChords(incoming);
+        const combinedChords = pendingChords + incomingChords;
+
+        const candidateMerged = mergeSegmentLists(pendingSegments, incoming);
+        const pendingWidth = measureSegmentsWidth(pendingSegments, baseFontSize);
+        const candidateWidth = measureSegmentsWidth(candidateMerged, baseFontSize);
+
+        const bothInstrumental = isInstrumentalOnly(pendingSegments) && isInstrumentalOnly(incoming);
+        const hasFragment = pendingChords <= 1 || incomingChords <= 1;
+        const isUnderfilled = pendingWidth < packTargetWidth * 0.52;
+
+        const fitsOnStaff =
+          combinedChords <= maxChordsPerRow &&
+          candidateWidth <= packTargetWidth;
+
+        if (fitsOnStaff && (hasFragment || bothInstrumental || isUnderfilled)) {
+          pendingSegments = candidateMerged;
+        } else {
+          flushPending();
+          pendingSegments = incoming.map((s) => ({ ...s }));
+        }
+      });
+
+      flushPending();
+      return result;
+    }
+
     function stepToY(diatonicStep, clef) {
       if (clef === 'treble') {
         return ENGRAVE.trebleTopY + (38 - diatonicStep) * ENGRAVE.halfStep;
@@ -1071,10 +1253,7 @@ Praise the [C]Lord, praise the [G]Lord, O my [C]soul`
       const baseFontSize = availableWidth < 640 ? 16 : 18;
 
       const totalChords = segments.filter((s) => s.chord).length;
-      const totalMeasuredWidth = segments.reduce((sum, seg, idx) => {
-        const t = idx === segments.length - 1 ? (seg.text || '').trimEnd() : (seg.text || '');
-        return sum + Math.max(measureLyricWidth(t, baseFontSize) + 4, seg.chord ? 44 : 10);
-      }, 0);
+      const totalMeasuredWidth = measureSegmentsWidth(segments, baseFontSize);
 
       // Fit on one full-width staff if chords and lyrics fit (allowing gentle font shrink)
       if (totalChords <= maxChordsPerRow && totalMeasuredWidth <= usableWidth * 1.18) {
@@ -1593,7 +1772,7 @@ Respond ONLY with valid JSON matching this exact schema:
       const rectWidth = container.getBoundingClientRect().width;
       const availableWidth = Math.floor(rectWidth || container.clientWidth || Math.max(260, window.innerWidth - 20));
 
-      const structured = parseSongLines(song.content);
+      const structured = autoFormatForViewport(parseSongLines(song.content), availableWidth);
       const detectedKey = detectInitialKey(structured, appState.transpose);
       document.getElementById('scoreKeyDisplay').textContent = `Starting Chord / Key: ${detectedKey}`;
 
